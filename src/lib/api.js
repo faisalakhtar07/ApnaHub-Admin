@@ -1,0 +1,44 @@
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const ADMIN_TOKEN_KEY = "apnahub_admin_token";
+
+function authHeader() {
+  const token = localStorage.getItem(ADMIN_TOKEN_KEY);
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function request(path, options = {}) {
+  const res = await fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: { "Content-Type": "application/json", ...authHeader(), ...(options.headers || {}) },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Request failed (${res.status})`);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+function resource(name) {
+  return {
+    list: () => request(`/${name}`),
+    get: (id) => request(`/${name}/${id}`),
+    create: (payload) => request(`/${name}`, { method: "POST", body: JSON.stringify(payload) }),
+    update: (id, payload) => request(`/${name}/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+    remove: (id) => request(`/${name}/${id}`, { method: "DELETE" }),
+  };
+}
+
+export const businessesApi = resource("businesses");
+export const jobsApi = resource("jobs");
+export const listingsApi = resource("listings");
+
+export const adminAuthApi = {
+  login: async (email, password) => {
+    const data = await request("/admin/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
+    localStorage.setItem(ADMIN_TOKEN_KEY, data.token);
+    return data;
+  },
+  logout: () => localStorage.removeItem(ADMIN_TOKEN_KEY),
+  isLoggedIn: () => Boolean(localStorage.getItem(ADMIN_TOKEN_KEY)),
+};
